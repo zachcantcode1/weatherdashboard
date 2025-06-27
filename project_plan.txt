@@ -1,0 +1,92 @@
+Project: All-in-One Weather Dashboard
+
+Tech Stack:
+- Frontend: React, Vite, Tailwind CSS, shadcn/ui
+- Backend: Node.js (with Express.js)
+
+---
+Phase 1: Foundation & Core Structure
+---
+
+1.  Technology Stack & Project Setup:
+    *   Frontend (React, Vite, Tailwind CSS, shadcn/ui):
+        *   Initialize React project (Vite: `npm create vite@latest app -- --template react`).
+        *   Integrate Tailwind CSS.
+        *   Initialize shadcn/ui (`npx shadcn-ui@latest init`).
+    *   Backend (Node.js & Express.js):
+        *   Initialize Node.js project (`npm init -y`).
+        *   Install Express.js (`npm install express`).
+        *   Basic Express.js server structure.
+    *   General Setup:
+        *   Main project directory (`weather-dashboard`) with `frontend` and `backend` subdirectories.
+        *   Initialize Git repository.
+
+2.  Basic Dashboard Layout & Navigation (React & shadcn/ui):
+    *   Main application shell (Header, Navigation components using shadcn/ui, content area).
+    *   Client-side routing (`react-router-dom`).
+    *   Placeholder React components for pages (HomePage, WeatherWisePage, etc.).
+
+---
+Phase 2: Landing Page Features (React, shadcn/ui & Node.js)
+---
+
+3.  NWS SPC Outlooks Integration:
+    *   Data Source: Confirm NWS SPC API endpoints.
+    *   Backend (Node.js/Express.js):
+        *   Express.js route (`/api/spc/outlooks`) to fetch/serve SPC data (using `axios` or `fetch`).
+    *   Frontend (React & shadcn/ui):
+        *   Fetch data on `HomePage`.
+        *   Display using `shadcn/ui Card` components.
+
+4.  Weather Alerts via XMPP:
+    *   Backend (Node.js):
+        *   Implement XMPP client logic.
+    *   Backend API for Alerts (Node.js/Express.js):
+        *   Express.js route (`/api/weather/alerts`) or WebSocket endpoint.
+    *   Frontend (React & shadcn/ui):
+        *   Display alerts on `HomePage` (e.g., in `shadcn/ui Card`, `Alert`, or `Toast`).
+
+---
+Phase 3: Embedding External Services (React)
+---
+
+5.  Embedding Web Services (WeatherWise, PivotalWeather, StormCenter):
+    *   Investigation: Check `X-Frame-Options` and CSP `frame-ancestors`.
+    *   Frontend (React):
+        *   Use `<iframe>` on respective pages.
+        *   Fallbacks (e.g., `shadcn/ui Button` to open in new tab) if embedding is blocked.
+
+---
+Phase 4: UI/UX and Refinements (React, Tailwind CSS & shadcn/ui)
+---
+
+6.  Modern UI/UX Polish:
+    *   Leverage `shadcn/ui` components extensively.
+    *   Customize with Tailwind CSS.
+    *   Ensure responsiveness.
+    *   Implement loading states (e.g., `shadcn/ui Skeleton`) and error messages (e.g., `shadcn/ui Alert`).
+
+---
+Phase 5: Backend and Deployment (Node.js & Debian)
+---
+
+7.  Backend Service Finalization (Node.js/Express.js):
+    *   Refine API endpoints (error handling, logging, caching).
+
+8.  Deployment on Debian Server:
+    *   Web Server (Nginx): Serve static React build, reverse proxy to Node.js backend.
+    *   Backend Process Management (PM2): Manage Node.js application.
+    *   Build & Deployment Process: Scripts for frontend and backend.
+    *   Security: HTTPS, firewall, secure Node.js app.
+
+---
+Phase 6: Testing and Iteration
+---
+
+9.  Thorough Testing:
+    *   Frontend: Unit, component, and manual testing.
+    *   Backend: API testing.
+    *   End-to-end testing.
+
+10. Feedback and Iteration:
+    *   Refine based on usage.

@@ -1,0 +1,18 @@
+{
+  "name": "weatherdashboard-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root package for weather dashboard, manages frontend and backend startup.",
+  "scripts": {
+    "postinstall": "npm install --prefix frontend/app && npm install --prefix backend",
+    "dev": "concurrently -n \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgGreen.bold\" \"npm:dev --prefix frontend/app\" \"npm:start --prefix backend\"",
+    "dev:fe": "npm run dev --prefix frontend/app",
+    "dev:be": "npm start --prefix backend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

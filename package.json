@@ -5,7 +5,7 @@
   "description": "Root package for weather dashboard, manages frontend and backend startup.",
   "scripts": {
     "postinstall": "npm install --prefix frontend/app && npm install --prefix backend",
-    "start": "concurrently -n \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgGreen.bold\" \"npm:build --prefix frontend/app && npm:serve --prefix frontend/app\" \"npm:start --prefix backend\"",
+    "start": "concurrently -n \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgGreen.bold\" \"npm:dev --prefix frontend/app\" \"npm:start --prefix backend\"",
     "start:prod": "concurrently -n \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgGreen.bold\" \"npm:build --prefix frontend/app && npm:serve --prefix frontend/app\" \"npm:start --prefix backend\"",
     "dev": "concurrently -n \"FRONTEND,BACKEND\" -c \"bgBlue.bold,bgGreen.bold\" \"npm:dev --prefix frontend/app\" \"npm:start --prefix backend\"",
     "dev:fe": "npm run dev --prefix frontend/app",

@@ -2,6 +2,9 @@ const config = require('./parserConfig.js');
 const { parseStringPromise } = require('xml2js');
 const he = require('he');
 
+// Toggle verbose logging
+const VERBOSE = process.env.XMPP_VERBOSE === 'true';
+
 /**
  * Parses a VTEC string into a structured object.
  * @param {string} vtecString - The raw VTEC string (e.g., O.NEW.KIND.SV.W.0123.240529T2345Z-240530T0015Z)
@@ -148,8 +151,10 @@ async function parseAlert(data, isCapXml = false) { // Make async for xml2js
             });
 
             if (!outerParseResult || !outerParseResult.x || typeof outerParseResult.x._ !== 'string') {
-                console.error('Error extracting CAP XML string from <x nwws-oi> element. Structure:', outerParseResult);
-                if (data) console.error('Original <x nwws-oi> data snippet for debug:', data.substring(0, 500));
+                if (VERBOSE) {
+                    console.error('Error extracting CAP XML string from <x nwws-oi> element. Structure:', outerParseResult);
+                    if (data) console.error('Original <x nwws-oi> data snippet for debug:', data.substring(0, 500));
+                }
                 return null;
             }
 
@@ -167,13 +172,15 @@ async function parseAlert(data, isCapXml = false) { // Make async for xml2js
                 if (alertTagIndex !== -1) {
                     actualCapXmlString = decodedContent.substring(alertTagIndex).trim();
                 } else {
-                    console.error('CAP XML declaration (<?xml) or <alert> tag not found in decoded <x nwws-oi> content.');
-                    console.error('Decoded content snippet for debugging:', decodedContent.substring(0, 500));
+                    if (VERBOSE) {
+                        console.error('CAP XML declaration (<?xml) or <alert> tag not found in decoded <x nwws-oi> content.');
+                        console.error('Decoded content snippet for debugging:', decodedContent.substring(0, 500));
+                    }
                     return null;
                 }
             }
 
-            console.log('[DEBUG] Attempting to parse cleaned CAP XML string (first 200 chars):', actualCapXmlString.substring(0, 200));
+            if (VERBOSE) console.log('[DEBUG] Attempting to parse cleaned CAP XML string (first 200 chars):', actualCapXmlString.substring(0, 200));
 
             // Second parse: parse the extracted and cleaned CAP XML string
             const result = await parseStringPromise(actualCapXmlString, {
@@ -181,18 +188,20 @@ async function parseAlert(data, isCapXml = false) { // Make async for xml2js
                 tagNameProcessors: [name => name.replace(/^cap:/, '')] // Remove 'cap:' prefix for the CAP alert structure
             });
 
-            console.log('[DEBUG] Result of inner parse (first 1000 chars of JSON):', JSON.stringify(result, null, 2).substring(0, 1000)); // Log snippet of parsed object
+            if (VERBOSE) console.log('[DEBUG] Result of inner parse (first 1000 chars of JSON):', JSON.stringify(result, null, 2).substring(0, 1000)); // Log snippet of parsed object
 
             // Now, the rest of the logic uses 'result' which is the parsed CAP <alert>
             if (!result || !result.alert || !result.alert.info) {
-                console.error('Invalid CAP XML structure after inner parsing. Parsed object:', JSON.stringify(result, null, 2).substring(0,1000));
-                console.error('Inner CAP XML string attempted (first 500 chars):', actualCapXmlString.substring(0, 500));
+                if (VERBOSE) {
+                    console.error('Invalid CAP XML structure after inner parsing. Parsed object:', JSON.stringify(result, null, 2).substring(0,1000));
+                    console.error('Inner CAP XML string attempted (first 500 chars):', actualCapXmlString.substring(0, 500));
+                }
                 return null;
             }
 
             const info = Array.isArray(result.alert.info) ? result.alert.info[0] : result.alert.info;
             if (!info) {
-                console.error('CAP alert.info is missing');
+                if (VERBOSE) console.error('CAP alert.info is missing');
                 return null;
             }
 
@@ -287,7 +296,7 @@ async function parseAlert(data, isCapXml = false) { // Make async for xml2js
             }
 
             if (!shouldProcess) {
-                console.log(`CAP Event '${capEventName}' (Severity: ${severity}, VTEC: ${vtecString || 'N/A'}) not in allowed list or not a W/A/Y/S. Skipping.`);
+                if (VERBOSE) console.log(`CAP Event '${capEventName}' (Severity: ${severity}, VTEC: ${vtecString || 'N/A'}) not in allowed list or not a W/A/Y/S. Skipping.`);
                 return null;
             }
 
@@ -311,8 +320,10 @@ async function parseAlert(data, isCapXml = false) { // Make async for xml2js
             return alert;
 
         } catch (err) {
-            console.error('Error parsing CAP XML:', err);
-            console.error('Problematic CAP XML string snippet:', data.substring(0, 500));
+            if (VERBOSE) {
+                console.error('Error parsing CAP XML:', err);
+                console.error('Problematic CAP XML string snippet:', data.substring(0, 500));
+            }
             return null;
         }
     } else {

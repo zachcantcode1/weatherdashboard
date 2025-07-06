@@ -23,11 +23,11 @@ const setupXmppClient = (io) => {
   const roomJid = `${room}/${username}`;
 
   xmpp.on('online', async (address) => {
-    console.log(`XMPP client online as ${address.toString()}`);
+    if (VERBOSE) console.log(`XMPP client online as ${address.toString()}`);
     // Send initial presence to the server
     await xmpp.send(xml('presence'));
     // Join the MUC room
-    console.log(`Joining room: ${roomJid}`);
+    if (VERBOSE) console.log(`Joining room: ${roomJid}`);
     await xmpp.send(xml('presence', { to: roomJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' })));
   });
 
@@ -74,7 +74,7 @@ const setupXmppClient = (io) => {
   });
 
   xmpp.on('offline', () => {
-    console.log('XMPP client offline');
+    if (VERBOSE) console.log('XMPP client offline');
   });
 
   xmpp.on('error', (err) => {

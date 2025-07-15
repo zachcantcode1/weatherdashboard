@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'; // Added useState fo
 import L from 'leaflet'; // Import Leaflet for L.DomEvent
 import { useMap } from 'react-leaflet'; // Import useMap
 
-const TimeSliderControl = ({ radarTimeInfo, onTimeChange }) => {
-  console.log('TimeSliderControl: Received props - radarTimeInfo:', JSON.parse(JSON.stringify(radarTimeInfo))); // Log every reception
+const TimeSliderControl = ({ radarTimes, selectedTime, onTimeChange }) => {
+  console.log('TimeSliderControl: Received props - radarTimes:', radarTimes?.length, 'selectedTime:', selectedTime);
   const controlContainerRef = useRef(null); 
   const sliderInputRef = useRef(null);    
   const map = useMap(); 
@@ -41,18 +41,22 @@ const TimeSliderControl = ({ radarTimeInfo, onTimeChange }) => {
     };
   }, [map]); 
 
-  if (!radarTimeInfo || !radarTimeInfo.availableTimes || radarTimeInfo.availableTimes.length === 0) {
-    console.warn('TimeSliderControl: Not rendering. radarTimeInfo:', radarTimeInfo);
+  if (!radarTimes || radarTimes.length === 0) {
+    console.warn('TimeSliderControl: Not rendering. radarTimes:', radarTimes?.length);
     return null;
   }
 
+  // Find current index based on selected time
+  const currentIndex = radarTimes.findIndex(time => time.timestamp === selectedTime) || radarTimes.length - 1;
+
   const handleSliderChange = (e) => {
     const newIndex = parseInt(e.target.value, 10);
-    onTimeChange(newIndex);
+    const selectedTime = radarTimes[newIndex];
+    onTimeChange(newIndex, selectedTime.timestamp);
   };
 
-  const formattedTime = radarTimeInfo.currentTimeISO 
-    ? new Date(radarTimeInfo.currentTimeISO).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const formattedTime = selectedTime && radarTimes.length > 0
+    ? radarTimes.find(time => time.timestamp === selectedTime)?.display || 'Loading...'
     : 'Loading...';
 
   return (
@@ -62,15 +66,15 @@ const TimeSliderControl = ({ radarTimeInfo, onTimeChange }) => {
       style={{ zIndex: 1000, pointerEvents: 'auto', minWidth: '200px', maxWidth: '300px' }}
     >
       <label htmlFor="map-time-slider" className="block text-xs font-medium text-gray-700 mb-1 text-center">
-        {formattedTime}
+        Radar: {formattedTime}
       </label>
       <input
         ref={sliderInputRef} // Assign ref to the input
         id="map-time-slider"
         type="range"
         min="0"
-        max={radarTimeInfo.availableTimes.length - 1}
-        value={radarTimeInfo.currentIndex}
+        max={radarTimes.length - 1}
+        value={currentIndex}
         onChange={handleSliderChange}
         // onMouseDown is now handled by the pointerdown listener in useEffect
         className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-primary-dark"

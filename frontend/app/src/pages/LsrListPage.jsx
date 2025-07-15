@@ -31,42 +31,87 @@ function LsrListPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetch('https://mapservices.weather.noaa.gov/vector/rest/services/obs/nws_local_storm_reports/MapServer/2/query?where=1%3D1&outFields=*&f=geojson')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        if (data && data.features) {
-          const sortedReports = data.features
-            .map(feature => ({
-              id: feature.properties.objectid, // Assuming objectid is unique
-              ...feature.properties
-            }))
-            .sort((a, b) => {
-              // Assuming 'validTime' is the field to sort by and it's a parseable date string or timestamp
-              // The NWS LSR data often has 'validTime' as a string like "2023/10/27 15:54:00+00"
-              // Or sometimes it might be a Unix timestamp in milliseconds.
-              // For this example, let's assume validTime is a string that needs parsing.
-              // If it's already a number (timestamp), Date.parse might not be needed.
-              const timeA = a.validTime ? new Date(a.validTime.replace(' ', 'T')).getTime() : 0;
-              const timeB = b.validTime ? new Date(b.validTime.replace(' ', 'T')).getTime() : 0;
-              return timeB - timeA; // Sort descending (most recent first)
-            });
-          setLsrReports(sortedReports.slice(0, 25));
-        } else {
-          setLsrReports([]);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('Error fetching LSR GeoJSON:', err);
-        setError(err.message);
-        setLoading(false);
-      });
+    let isMounted = true;
+    let intervalId;
+
+    const fetchReports = () => {
+      setLoading(true);
+      fetch('https://mesonet.agron.iastate.edu/geojson/lsr.geojson?&hours=24')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data && data.features) {
+            const today = new Date();
+            const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
+            const filteredReports = data.features
+              .map(feature => {
+                const p = feature.properties;
+                return {
+                  id: feature.id || p.product_id || p.id,
+                  city: p.city,
+                  county: p.county,
+                  state: p.state || p.st,
+                  magnitude: Number(p.magnitude) || Number(p.magf) || 0,
+                  units: p.unit,
+                  remarks: p.remark,
+                  type: p.typetext || p.type,
+                  valid: p.valid,
+                  source: p.source,
+                  wfo: p.wfo,
+                };
+              })
+              .filter(report => {
+                // Only today
+                if (!report.valid) return false;
+                const reportTime = new Date(report.valid);
+                if (reportTime < todayStart || reportTime >= todayEnd) {
+                  return false;
+                }
+                // Filter out rain/flood reports
+                const description = (report.type || '').toLowerCase();
+                if (description.includes('rain') ||
+                    description.includes('heavy rain') ||
+                    description.includes('excessive rainfall') ||
+                    description.includes('rainfall') ||
+                    description.includes('precipitation') ||
+                    description.includes('flooding rain') ||
+                    description.includes('flood')) {
+                  return false;
+                }
+                return true;
+              })
+              .sort((a, b) => {
+                // Sort by most recent
+                let timeA = a.valid ? new Date(a.valid).getTime() : 0;
+                let timeB = b.valid ? new Date(b.valid).getTime() : 0;
+                return timeB - timeA;
+              });
+            if (isMounted) setLsrReports(filteredReports.slice(0, 25));
+          } else {
+            if (isMounted) setLsrReports([]);
+          }
+          if (isMounted) setLoading(false);
+        })
+        .catch(err => {
+          console.error('Error fetching LSR GeoJSON:', err);
+          if (isMounted) setError(err.message);
+          if (isMounted) setLoading(false);
+        });
+    };
+
+    fetchReports();
+    intervalId = setInterval(fetchReports, 300000); // 5 minutes
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
   }, []);
 
   if (loading) {
@@ -85,29 +130,30 @@ function LsrListPage() {
   }
 
   if (lsrReports.length === 0) {
-    return <div className="container mx-auto p-4 text-center">No recent storm reports found.</div>;
+    return <div className="container mx-auto p-4 text-center">No storm reports found for today.</div>;
   }
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">Recent Local Storm Reports (Top 25)</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center">Recent Storm Reports</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {lsrReports.map((report) => (
-          <Card key={report.objectid || report.remarks + report.lsr_validtime} className="flex flex-col">
+          <Card key={report.id || report.remarks + report.valid} className="flex flex-col">
             <CardHeader>
-              <CardTitle className="text-lg">{descriptMappings[report.descript] || report.descript || 'Storm Report'}</CardTitle>
-              {report.loc_desc && <CardDescription className="text-sm text-muted-foreground pt-1">{report.loc_desc}</CardDescription>}
+              <CardTitle className="text-lg">{report.type || 'Storm Report'}</CardTitle>
               <CardDescription>
-                {report.location ? `${report.location}, ` : ''}{report.state ? stateAbbreviationsToNames[report.state.toUpperCase()] || report.state : ''}
+                {report.city ? `${report.city}, ` : ''}
+                {report.county ? `${report.county} County, ` : ''}
+                {report.state ? stateAbbreviationsToNames[report.state.toUpperCase()] || report.state : ''}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-grow">
               <p className="text-sm mt-2">{report.remarks || 'No remarks.'}</p>
               <p className="text-sm text-muted-foreground mt-2">
-                Time: {report.lsr_validtime ? new Date(report.lsr_validtime).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'N/A'}
+                Time: {report.valid ? new Date(report.valid).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'N/A'}
               </p>
               <p className="text-sm mt-2">Magnitude: {report.magnitude || 'N/A'} {report.units || ''}</p>
-              {report.issuingOffice && <p className="text-xs mt-2 text-muted-foreground">Office: {report.issuingOffice}</p>}
+              {report.wfo && <p className="text-xs mt-2 text-muted-foreground">Office: {report.wfo}</p>}
             </CardContent>
           </Card>
         ))}

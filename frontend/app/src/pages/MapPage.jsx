@@ -3,14 +3,18 @@ import L from 'leaflet';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, Circle, useMap, WMSTileLayer, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, WMSTileLayer, GeoJSON } from 'react-leaflet';
 
 import * as LEsri from 'esri-leaflet';
 import { createLayerComponent } from '@react-leaflet/core';
 import MarkerClusterGroup from 'react-leaflet-markercluster';
 import LsrLegend from '../components/LsrLegend'; // Adjust path if LsrLegend is elsewhere
-import TimeSliderControl from '../components/TimeSliderControl';
 import MapControls from '../components/MapControls';
+import AtmosXAlertsLayer from '../components/AtmosXAlertsLayer';
+import IEMRadarLayer from '../components/IEMRadarLayer';
+import RadarTimeSlider from '../components/RadarTimeSlider';
+import FutureRadarLayer from '../components/FutureRadarLayer';
+import FutureRadarTimeSlider from '../components/FutureRadarTimeSlider';
 
 // Helper component to adjust map view based on alert geometry
 function MapController({ alertGeometry }) {
@@ -82,11 +86,11 @@ const getLsrIcon = (descript) => {
   // e.g., 'Funnel Cloud', 'Waterspout', 'Dust Devil', 'Wildfire', 'Volcanic Ash'
 
   return L.divIcon({
-    html: `<i class="${iconClass}" style="color: ${color}; font-size: 24px; text-shadow: 0 0 3px #000;"></i>`,
+    html: `<i class="${iconClass}" style="color: ${color}; font-size: 20px; text-shadow: 0 0 3px #000;"></i>`,
     className: 'lsr-custom-icon', // For any additional CSS if needed
-    iconSize: [24, 24],
-    iconAnchor: [12, 24], // Point of the icon which will correspond to marker's location
-    popupAnchor: [0, -24] // Point from which the popup should open relative to the iconAnchor
+    iconSize: [20, 20],
+    iconAnchor: [10, 20], // Point of the icon which will correspond to marker's location
+    popupAnchor: [0, -20] // Point from which the popup should open relative to the iconAnchor
   });
 };
 
@@ -132,99 +136,56 @@ const EsriFeatureLayer = (url, style) => createLayerComponent((props, ctx) => {
   return { instance: layer, context: ctx };
 });
 
-const WWAFeatureLayer = createLayerComponent((props, ctx) => {
-  const styleFn = props.styleFn || null;
-  const layer = LEsri.featureLayer({
-    url: props.url,
-    where: props.where,
-    style: styleFn || props.style || { color: '#FF00FF', weight: 1, fillOpacity: 0.4 },
-    onEachFeature: (feature, leafletLayer) => {
-      // Bind popup content with basic details
-      const {
-        event, prod_type, phenom, sig,
-        headline,
-        wfo,
-        begints,
-        expirets,
-        etn,
-        officeid,
-      } = feature.properties;
-
-      // Build title and details list
-      const title = `${prod_type || event || phenom || 'Warning'}`.trim();
-      const fieldLabels = {
-        issuance: 'Issued',
-        expiration: 'Expires',
-      };
-      const detailLines = Object.entries(fieldLabels)
-        .map(([key, label]) => {
-          const val = feature.properties[key];
-          if (val && String(val).trim() !== '') {
-            return `${label}: ${val}`;
-          }
-          return null;
-        })
-        .filter(Boolean);
-      // If no details matched, fall back to showing all properties for now
-      const fallbackLines = Object.entries(feature.properties)
-        .slice(0, 15) // limit length
-        .map(([k, v]) => `${k}: ${v}`);
-      const popupHtml = `<strong>${title}</strong><br/>${(detailLines.length ? detailLines : fallbackLines).join('<br/>')}`;
-      leafletLayer.bindPopup(popupHtml);
-      leafletLayer.on('click', () => {
-        if (ctx && ctx.map) {
-          ctx.map.fitBounds(leafletLayer.getBounds());
-          leafletLayer.openPopup();
-        }
-      });
-    }
-  });
-  return { instance: layer, context: ctx };
-});
-
 export function MapPage() {
   console.log('[MapPage] Component rendering/re-rendering');
   const [radarOpacity, setRadarOpacity] = useState(0.7);
-  const [showRadar, setShowRadar] = useState(true);
-  const [showWwa, setShowWwa] = useState(true);
-  const [showLsrLayer, setShowLsrLayer] = useState(true);
+  // Map layer selection state - single selection for all layers
+  const [mapSelection, setMapSelection] = useState('radar-warnings'); // 'radar-warnings', 'storm-reports', 'warnings-only'
+  
+  // Radar-specific state
+  const [radarSelectedTime, setRadarSelectedTime] = useState(null);
+  const [radarAvailableTimes, setRadarAvailableTimes] = useState([]);
+  const [radarLoading, setRadarLoading] = useState(false);
+  const [radarLooping, setRadarLooping] = useState(false);
+  const loopIntervalRef = useRef(null);
+
+  // Future radar state
+  const [futureRadarForecastMinute, setFutureRadarForecastMinute] = useState(0);
+  const [futureRadarModelRun, setFutureRadarModelRun] = useState(null);
+  const [futureRadarLoading, setFutureRadarLoading] = useState(false);
+  const [futureRadarError, setFutureRadarError] = useState(null);
 
   const [lsrData, setLsrData] = useState(null);
-  const [radarTimeInfo, _setRadarTimeInfo] = useState(() => {
-    console.log('[MapPage] Initializing radarTimeInfo state');
-    return {
-      availableTimes: [], // Array of available time strings
-      effectiveTime: '', // The currently selected time string for the radar layer
-      isLoading: true,
-      error: null,
-    }
-  }); // Renamed original setter
 
-  const setRadarTimeInfo = (newStateOrCallback) => {
-    console.log('MapPage: Calling setRadarTimeInfo. Argument type:', typeof newStateOrCallback);
-    if (typeof newStateOrCallback === 'function') {
-      console.log('MapPage: setRadarTimeInfo called with an updater function.');
-      _setRadarTimeInfo(prevState => {
-        const nextStateToSet = newStateOrCallback(prevState);
-        console.log('MapPage: setRadarTimeInfo (updater) - Prev state (inside _setRadarTimeInfo):', JSON.parse(JSON.stringify(prevState)));
-        console.log('MapPage: setRadarTimeInfo (updater) - Next state (inside _setRadarTimeInfo):', JSON.parse(JSON.stringify(nextStateToSet)));
-        return nextStateToSet;
-      });
-    } else {
-      console.log('MapPage: setRadarTimeInfo called with new state object:', JSON.parse(JSON.stringify(newStateOrCallback)));
-      _setRadarTimeInfo(newStateOrCallback);
-    }
-  };
+  // Derived states based on selection
+  const showRadar = mapSelection === 'radar-warnings';
+  const showWwa = mapSelection === 'radar-warnings' || mapSelection === 'warnings-only';
+  const showLsrLayer = mapSelection === 'storm-reports';
+  const showFutureRadar = mapSelection === 'future-radar';
+  
+  // Expose functions for IEM radar layer to communicate with parent
+  useEffect(() => {
+    window.setRadarTimes = (times) => {
+      setRadarAvailableTimes(times);
+      // Set initial time to the latest available
+      if (times.length > 0 && !radarSelectedTime) {
+        setRadarSelectedTime(times[times.length - 1].timestamp);
+      }
+    };
+    
+    window.setRadarLoading = (loading) => {
+      setRadarLoading(loading);
+    };
+    
+    return () => {
+      delete window.setRadarTimes;
+      delete window.setRadarLoading;
+    };
+  }, [radarSelectedTime]);
 
-  const [radarTimeInfo_useState_direct_access_for_debug, setRadarTimeInfo_original] = useState({ 
-    availableTimes: [],       // Array of ISO strings
-    currentTime: null,        // This will now be the *visual* current time for display/slider, updates immediately
-    currentIndex: 0,          // Index for the slider, updates immediately
-    effectiveTime: null,      // ISO string for the WMS layer, updates debounced
-  });
   const debounceTimerRef = useRef(null);
   const location = useLocation();
-  console.log('MapPage: showLsrLayer state:', showLsrLayer); // Log showLsrLayer state
+  console.log('MapPage: mapSelection state:', mapSelection); // Log map selection state
   const alertGeometry = location.state?.alertGeometry;
 
   // Clear alertGeometry from history state after first render to avoid persistence on refresh
@@ -235,145 +196,135 @@ export function MapPage() {
     }
   }, []);
 
-  let circleCenter = null;
-  let circleRadius = null;
-  if (alertGeometry && alertGeometry.type === 'Point' && alertGeometry.coordinates) {
-    circleCenter = [alertGeometry.coordinates[1], alertGeometry.coordinates[0]]; // GeoJSON is [lng, lat], Leaflet is [lat, lng]
-    circleRadius = alertGeometry.radius || 10000; // Default radius in meters
-  }
-
-  let polygonPositions = null;
-  if (alertGeometry && alertGeometry.type === 'Polygon' && alertGeometry.coordinates && alertGeometry.coordinates[0]) {
-    polygonPositions = alertGeometry.coordinates[0];
-  }
-
   // Approximate geographic center of contiguous USA
   const defaultUsaCenter = [39.8283, -98.5795];
-  const initialZoom = alertGeometry ? 7 : 4; // Wider view when no specific geometry
+  const initialZoom = 4; // Default zoom level
 
-  // Determine initial center: use geometry if available, otherwise USA center
-  const initialCenter = alertGeometry ? (circleCenter || defaultUsaCenter) : defaultUsaCenter;
+  // Default center
+  const initialCenter = defaultUsaCenter;
 
   useEffect(() => {
-    console.log('MapPage: LSR useEffect triggered. showLsrLayer:', showLsrLayer, 'lsrData exists:', !!lsrData); // Log effect trigger
+    console.log('MapPage: LSR useEffect triggered. mapSelection:', mapSelection, 'lsrData exists:', !!lsrData); // Log effect trigger
     if (showLsrLayer && !lsrData) {
       console.log('MapPage: Fetching LSR GeoJSON data...'); // Log fetch initiation
       fetch('https://mapservices.weather.noaa.gov/vector/rest/services/obs/nws_local_storm_reports/MapServer/0/query?where=1%3D1&outFields=*&f=geojson')
         .then(response => response.json())
         .then(data => {
           console.log('MapPage: Received LSR GeoJSON data:', data); // Log received data
-          setLsrData(data);
+          
+          // Filter data for current day only and exclude rain reports
+          if (data && data.features) {
+            const today = new Date();
+            const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000); // Next day start
+            
+            const filteredFeatures = data.features.filter(feature => {
+              const props = feature.properties;
+              
+              // Filter for current day only
+              if (props.lsr_validtime) {
+                const reportTime = new Date(props.lsr_validtime);
+                if (reportTime < todayStart || reportTime >= todayEnd) {
+                  return false; // Not from today
+                }
+              }
+              
+              // Filter out rain reports
+              const description = (props.descript || '').toLowerCase();
+              if (description.includes('rain') || 
+                  description.includes('heavy rain') || 
+                  description.includes('excessive rainfall') ||
+                  description.includes('rainfall') ||
+                  description.includes('precipitation') ||
+                  description.includes('flooding rain') ||
+                  description.includes('flood')) {
+                return false; // Skip rain/flood reports
+              }
+              
+              return true;
+            });
+            
+            // Update data with filtered features
+            const filteredData = {
+              ...data,
+              features: filteredFeatures
+            };
+            
+            console.log(`MapPage: Filtered LSR data - ${filteredFeatures.length} reports from today (excluding rain)`);
+            setLsrData(filteredData);
+          } else {
+            setLsrData(data);
+          }
         })
         .catch(error => {
           console.error('MapPage: Error fetching LSR GeoJSON data:', error); // Log fetch error
         });
-    } else if (!showLsrLayer && lsrData) {
+    } else if (mapSelection !== 'storm-reports' && lsrData) {
       // Optional: Consider clearing data if layer is turned off and you want to re-fetch next time
       // Or to free up memory if features are very numerous.
       // console.log('MapPage: LSR layer turned off, optionally clear lsrData here.');
       // setLsrData(null); // Uncomment if you want to clear data on toggle off
     }
-  }, [showLsrLayer]);
-
-  // Effect to fetch WMS capabilities and parse time dimension
-  useEffect(() => {
-    const fetchRadarCapabilities = async () => {
-      console.log('[MapPage] fetchRadarCapabilities called');
-      setRadarTimeInfo(prev => ({ ...prev, isLoading: true, error: null, availableTimes: [], effectiveTime: '' }));
-      try {
-        console.log('[MapPage] fetchRadarCapabilities: fetching capabilities from', 'https://nowcoast.ncep.noaa.gov/arcgis/services/nowcoast/radar_meteo_imagery_nexrad_time/MapServer/WMSServer?service=WMS&version=1.3.0&request=GetCapabilities');
-        const response = await fetch('https://nowcoast.ncep.noaa.gov/arcgis/services/nowcoast/radar_meteo_imagery_nexrad_time/MapServer/WMSServer?service=WMS&version=1.3.0&request=GetCapabilities');
-        console.log('[MapPage] fetchRadarCapabilities: response status', response.status);
-        if (!response.ok) {
-          const errorMsg = `HTTP error! status: ${response.status}`;
-          console.error('[MapPage] fetchRadarCapabilities: fetch error', errorMsg);
-          throw new Error(errorMsg);
-        }
-        const xmlText = await response.text();
-        console.log('[MapPage] fetchRadarCapabilities: successfully fetched XML text (first 500 chars):', xmlText.substring(0, 500));
-        const parser = new DOMParser();
-        console.log('[MapPage] fetchRadarCapabilities: attempting to parse XML');
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-        const timeDimension = xmlDoc.querySelector('Dimension[name="time"]');
-        console.log('MapPage: Raw timeDimension content:', timeDimension ? timeDimension.textContent : 'Not found');
-        
-        if (timeDimension) {
-          const timeExtent = timeDimension.textContent.split('/');
-          if (timeExtent.length >= 2) {
-            const startTimeStr = timeExtent[0];
-            const startTime = new Date(startTimeStr);
-            const endTime = new Date(startTime);
-            endTime.setHours(startTime.getHours() + 4); // 4-hour window
-
-            const availableTimes = [];
-            let currentTimeIter = new Date(startTime);
-            while (currentTimeIter <= endTime) {
-              availableTimes.push(currentTimeIter.toISOString());
-              currentTimeIter.setMinutes(currentTimeIter.getMinutes() + 10);
-            }
-            console.log('MapPage: Generated availableTimes:', availableTimes);
-            
-            if (availableTimes.length > 0) {
-              const latestTimeIndex = availableTimes.length - 1;
-              const initialTime = availableTimes[latestTimeIndex];
-              console.log('[MapPage] fetchRadarCapabilities: successfully parsed times, updating state.');
-              setRadarTimeInfo({ // This will now use the wrapper function
-                availableTimes: availableTimes,
-                currentTime: initialTime,      // Initial visual time
-                currentIndex: latestTimeIndex, // Initial slider index
-                effectiveTime: initialTime,    // Initial time for WMS layer
-              });
-              console.log('MapPage: Set radarTimeInfo with times:', { availableTimes, initialTime, latestTimeIndex });
-            } else {
-              console.warn('No available radar times were generated.');
-              setRadarTimeInfo(prev => {
-                console.log('MapPage: setRadarTimeInfo (updater in catch/warn) - Clearing times. Prev state:', JSON.parse(JSON.stringify(prev)));
-                return { ...prev, availableTimes: [], currentTime: null, currentIndex: 0, effectiveTime: null };
-              });
-            }
-          } else {
-            console.error('Could not parse time extent from WMS capabilities.');
-          }
-        } else {
-          console.error('Time dimension not found in WMS capabilities.');
-        }
-      } catch (error) {
-        console.error('[MapPage] fetchRadarCapabilities: CATCH block - Error fetching or parsing radar capabilities:', error);
-        setRadarTimeInfo(prevState => ({ ...prevState, isLoading: false, error: error.message }));
-      }
-    };
-
-    console.log('[MapPage] Calling fetchRadarCapabilities in useEffect');
-    fetchRadarCapabilities();
-  }, []);
-
-  useEffect(() => {
-    console.log('[MapPage] radarTimeInfo changed:', radarTimeInfo);
-  }, [radarTimeInfo]);
+  }, [mapSelection]);
 
   const handleTimeChange = (newIndex, newTime) => {
-    // Update visual state immediately
-    setRadarTimeInfo(prev => ({
-      ...prev,
-      currentIndex: newIndex,
-      currentTime: newTime, // This updates the time display in TimeSliderControl immediately
-    }));
-
-    // Clear previous debounce timer
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+    // Stop looping when user manually changes time
+    if (radarLooping) {
+      setRadarLooping(false);
+      if (loopIntervalRef.current) {
+        clearInterval(loopIntervalRef.current);
+        loopIntervalRef.current = null;
+      }
     }
-
-    // Set new debounce timer to update the WMS layer's time
-    debounceTimerRef.current = setTimeout(() => {
-      setRadarTimeInfo(prev => ({
-        ...prev,
-        effectiveTime: newTime, // Update the time that the WMS layer uses
-      }));
-    }, 300); // 300ms debounce delay
+    
+    // Update selected radar time
+    setRadarSelectedTime(newTime);
   };
 
-  console.log("MapPage: Rendering with radarTimeInfo state:", radarTimeInfo);
+  const handleLoopToggle = (isLooping) => {
+    setRadarLooping(isLooping);
+    
+    if (isLooping) {
+      // Start looping animation
+      loopIntervalRef.current = setInterval(() => {
+        setRadarSelectedTime(currentTime => {
+          if (!radarAvailableTimes.length) return currentTime;
+          
+          const currentIndex = radarAvailableTimes.findIndex(time => time.timestamp === currentTime);
+          const nextIndex = currentIndex >= radarAvailableTimes.length - 1 ? 0 : currentIndex + 1;
+          return radarAvailableTimes[nextIndex]?.timestamp || currentTime;
+        });
+      }, 800); // Change frame every 800ms
+    } else {
+      // Stop looping
+      if (loopIntervalRef.current) {
+        clearInterval(loopIntervalRef.current);
+        loopIntervalRef.current = null;
+      }
+    }
+  };
+
+  // Future radar callback functions
+  const handleFutureRadarTimeChange = (minutes) => {
+    setFutureRadarForecastMinute(minutes);
+  };
+
+  const handleFutureRadarModelRunChange = (modelRun, loading, error) => {
+    setFutureRadarModelRun(modelRun);
+    setFutureRadarLoading(loading);
+    setFutureRadarError(error);
+  };
+
+  // Cleanup loop interval on unmount
+  useEffect(() => {
+    return () => {
+      if (loopIntervalRef.current) {
+        clearInterval(loopIntervalRef.current);
+      }
+    };
+  }, []);
+
+  console.log("MapPage: Rendering with radarAvailableTimes:", radarAvailableTimes.length, "times");
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -416,37 +367,63 @@ export function MapPage() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {/* Radar */}
-          {showRadar && (
-            <WMSTileLayer
-              url="https://mapservices.weather.noaa.gov/eventdriven/services/radar/radar_base_reflectivity_time/ImageServer/WMSServer"
-              layers="0"
-              params={{ TIME: radarTimeInfo.effectiveTime }}
-              format="image/png"
-              transparent
+          {/* IEM NEXRAD Radar */}
+          <IEMRadarLayer 
+            isVisible={showRadar}
+            opacity={radarOpacity}
+            selectedTime={radarSelectedTime}
+          />
+
+          {/* Future Radar from HRRR Model */}
+          {showFutureRadar && (
+            <FutureRadarLayer
+              isVisible={showFutureRadar}
               opacity={radarOpacity}
-              key={`radar-${radarTimeInfo.effectiveTime}`}
+              forecastMinute={futureRadarForecastMinute}
+              onModelRunChange={handleFutureRadarModelRunChange}
             />
           )}
 
-          {/* Watches / Warnings */}
+          {/* AtmosphericX Weather Alerts */}
           {showWwa && (
-            <WWAFeatureLayer
-              url="https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/0"
-              where="((phenom IN ('SV','TO') AND sig = 'W') OR prod_type = 'Special Weather Statement')"
-              styleFn={(feature) => {
-                const { phenom, sig, prod_type } = feature.properties;
-                if (phenom === 'SV' && sig === 'W') return { color: '#FFFF00', weight: 2, fillOpacity: 0.3 };
-                if (phenom === 'TO' && sig === 'W') return { color: '#FF0000', weight: 2, fillOpacity: 0.3 };
-                if (prod_type === 'Special Weather Statement') return { color: '#00FFFF', weight: 2, fillOpacity: 0.3 };
-                return { color: '#FFFFFF', weight: 1, fillOpacity: 0.2 };
-              }}
-            />
+            <AtmosXAlertsLayer isVisible={true} />
           )}
 
           {/* Local Storm Reports */}
           {showLsrLayer && (
-            <MarkerClusterGroup>
+            <MarkerClusterGroup
+              iconCreateFunction={(cluster) => {
+                const count = cluster.getChildCount();
+                let size = 'small';
+                if (count > 10) size = 'medium';
+                if (count > 25) size = 'large';
+                
+                return L.divIcon({
+                  html: `<div style="
+                    background: rgba(0, 123, 255, 0.8);
+                    border: 2px solid #ffffff;
+                    border-radius: 50%;
+                    color: white;
+                    font-size: 11px;
+                    font-weight: bold;
+                    text-align: center;
+                    line-height: ${size === 'small' ? '20px' : size === 'medium' ? '24px' : '28px'};
+                    width: ${size === 'small' ? '20px' : size === 'medium' ? '24px' : '28px'};
+                    height: ${size === 'small' ? '20px' : size === 'medium' ? '24px' : '28px'};
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                  ">${count}</div>`,
+                  className: 'custom-cluster-icon',
+                  iconSize: L.point(
+                    size === 'small' ? 20 : size === 'medium' ? 24 : 28,
+                    size === 'small' ? 20 : size === 'medium' ? 24 : 28
+                  )
+                });
+              }}
+              maxClusterRadius={40}
+              spiderfyOnMaxZoom={true}
+              showCoverageOnHover={false}
+              zoomToBoundsOnClick={true}
+            >
               <GeoJSON
                 key={lsrData ? lsrData.features.length : 0}
                 data={lsrData || { type: 'FeatureCollection', features: [] }}
@@ -456,17 +433,8 @@ export function MapPage() {
             </MarkerClusterGroup>
           )}
 
-          {/* Controller and geometry highlights */}
+          {/* Controller for zoom-to-alert functionality */}
           <MapController alertGeometry={alertGeometry} />
-          {alertGeometry && alertGeometry.type === 'Polygon' && polygonPositions && (
-            <Polygon positions={polygonPositions} pathOptions={{ color: 'red' }} />
-          )}
-          {alertGeometry && alertGeometry.type === 'Point' && circleCenter && circleRadius && (
-            <Circle center={circleCenter} radius={circleRadius} pathOptions={{ color: 'blue' }} />
-          )}
-
-          {/* Time slider inside map for React-Leaflet context */}
-          <TimeSliderControl radarTimeInfo={radarTimeInfo} onTimeChange={handleTimeChange} />
         </MapContainer>
 
         {/* Legend */}
@@ -474,16 +442,37 @@ export function MapPage() {
 
         {/* Controls overlay */}
         <MapControls
-          showRadar={showRadar}
-          setShowRadar={setShowRadar}
-          showWwa={showWwa}
-          setShowWwa={setShowWwa}
-          showLsr={showLsrLayer}
-          setShowLsr={setShowLsrLayer}
+          mapSelection={mapSelection}
+          setMapSelection={setMapSelection}
           radarOpacity={radarOpacity}
           setRadarOpacity={setRadarOpacity}
           positionClass="absolute top-4 right-4"
         />
+
+        {/* Radar Time Slider - positioned outside map to avoid interaction conflicts */}
+        {showRadar && (
+          <RadarTimeSlider
+            radarTimes={radarAvailableTimes}
+            selectedTime={radarSelectedTime}
+            onTimeChange={handleTimeChange}
+            isLoading={radarLoading}
+            isLooping={radarLooping}
+            onLoopToggle={handleLoopToggle}
+            positionClass="absolute bottom-4 left-4"
+          />
+        )}
+
+        {/* Future Radar Time Slider - positioned outside map to avoid interaction conflicts */}
+        {showFutureRadar && (
+          <FutureRadarTimeSlider
+            forecastMinute={futureRadarForecastMinute}
+            onTimeChange={handleFutureRadarTimeChange}
+            modelRun={futureRadarModelRun}
+            isLoading={futureRadarLoading}
+            error={futureRadarError}
+            positionClass="absolute bottom-4 left-4"
+          />
+        )}
       </div>
     </div>
   );

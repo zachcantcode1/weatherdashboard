@@ -37,9 +37,14 @@ const menuItems = [
     icon: Camera,
   },
   {
-    title: "Recent LSRs",
+    title: "Recent Storm Reports",
     path: "/recent-lsr",
     icon: List,
+  },
+  {
+    title: "Top Storm Reports",
+    path: "/top-storm-reports",
+    icon: BarChart2,
   },
   {
     title: "SPC Outlooks",

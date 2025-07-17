@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 // Toggle verbose backend logging (including Socket.IO connect/disconnect)
 const VERBOSE = process.env.XMPP_VERBOSE === 'true';
@@ -8,6 +9,10 @@ const { setupXmppClient } = require('./xmppClient');
 
 const app = express();
 const server = http.createServer(app);
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Setup Socket.IO with CORS configuration to allow our frontend to connect
 const io = new Server(server, {

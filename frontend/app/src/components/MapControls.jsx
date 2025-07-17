@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 /**
  * MapControls component
@@ -8,82 +8,134 @@ import React from 'react';
 const MapControls = ({
   mapSelection,
   setMapSelection,
-  radarOpacity,
-  setRadarOpacity,
-  positionClass = 'fixed top-4 right-4',
+  spcOutlookLayer,
+  setSpcOutlookLayer,
+  positionClass = 'absolute top-4 left-1/2 transform -translate-x-1/2',
 }) => {
-  return (
-    <div className={`${positionClass} z-[1000] w-56 rounded-lg bg-gray-800/90 backdrop-blur-md shadow-lg p-4`}>
-      <h3 className="text-sm font-semibold text-gray-200 mb-3">Map Controls</h3>
+  const [showSpcSubmenu, setShowSpcSubmenu] = useState(false);
+  const submenuRef = useRef(null);
 
+  // Close submenu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (submenuRef.current && !submenuRef.current.contains(event.target)) {
+        setShowSpcSubmenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Available SPC Outlook layers (KML-based)
+  const spcLayers = [
+    // Day 1 Outlooks
+    { id: 'day1-categorical', name: 'Day 1 Categorical', description: 'Day 1 Categorical Outlook', type: 'categorical', day: 1 },
+    { id: 'day1-tornado', name: 'Day 1 Tornado Prob', description: 'Day 1 Probabilistic Tornado Outlook', type: 'tornado', day: 1 },
+    { id: 'day1-hail', name: 'Day 1 Hail Prob', description: 'Day 1 Probabilistic Hail Outlook', type: 'hail', day: 1 },
+    { id: 'day1-wind', name: 'Day 1 Wind Prob', description: 'Day 1 Probabilistic Wind Outlook', type: 'wind', day: 1 },
+    
+    // Day 2 Outlooks
+    { id: 'day2-categorical', name: 'Day 2 Categorical', description: 'Day 2 Categorical Outlook', type: 'categorical', day: 2 },
+    { id: 'day2-tornado', name: 'Day 2 Tornado Prob', description: 'Day 2 Probabilistic Tornado Outlook', type: 'tornado', day: 2 },
+    { id: 'day2-hail', name: 'Day 2 Hail Prob', description: 'Day 2 Probabilistic Hail Outlook', type: 'hail', day: 2 },
+    { id: 'day2-wind', name: 'Day 2 Wind Prob', description: 'Day 2 Probabilistic Wind Outlook', type: 'wind', day: 2 },
+    
+    // Day 3 Outlook
+    { id: 'day3-categorical', name: 'Day 3 Categorical', description: 'Day 3 Categorical Outlook', type: 'categorical', day: 3 },
+    { id: 'day3-probabilistic', name: 'Day 3 Probabilistic', description: 'Day 3 Probabilistic Outlook', type: 'probabilistic', day: 3 },
+    
+    // Day 4-8 Extended Outlooks
+    { id: 'day4-probabilistic', name: 'Day 4 Probabilistic', description: 'Day 4 Probabilistic Outlook', type: 'probabilistic', day: 4 },
+    { id: 'day5-probabilistic', name: 'Day 5 Probabilistic', description: 'Day 5 Probabilistic Outlook', type: 'probabilistic', day: 5 },
+    { id: 'day6-probabilistic', name: 'Day 6 Probabilistic', description: 'Day 6 Probabilistic Outlook', type: 'probabilistic', day: 6 },
+    { id: 'day7-probabilistic', name: 'Day 7 Probabilistic', description: 'Day 7 Probabilistic Outlook', type: 'probabilistic', day: 7 },
+    { id: 'day8-probabilistic', name: 'Day 8 Probabilistic', description: 'Day 8 Probabilistic Outlook', type: 'probabilistic', day: 8 },
+  ];
+
+  const handleSpcOutlookClick = () => {
+    setMapSelection('spc-outlooks');
+    setShowSpcSubmenu(!showSpcSubmenu);
+  };
+
+  const handleSpcLayerSelect = (layerId) => {
+    console.log('SPC Layer selected:', layerId); // Debug log
+    setSpcOutlookLayer(layerId);
+    setShowSpcSubmenu(false);
+  };
+  return (
+    <div className={`${positionClass} z-[1000] rounded-lg bg-gray-800/90 backdrop-blur-md shadow-lg p-3`}>
       {/* Map Layer Selection */}
-      <div className="mb-4">
-        <h4 className="text-xs font-medium text-gray-300 mb-2">Display</h4>
-        <div className="space-y-2">
-          <label className="flex items-center text-gray-200 text-sm gap-2 cursor-pointer select-none">
-            <input
-              type="radio"
-              name="mapLayer"
-              value="radar-warnings"
-              className="form-radio text-teal-500 bg-gray-700 border-gray-600 focus:ring-teal-500"
-              checked={mapSelection === 'radar-warnings'}
-              onChange={(e) => setMapSelection(e.target.value)}
-            />
+      <div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setMapSelection('radar-warnings')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+              mapSelection === 'radar-warnings'
+                ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
+            }`}
+          >
             Radar with Warnings
-          </label>
-          <label className="flex items-center text-gray-200 text-sm gap-2 cursor-pointer select-none">
-            <input
-              type="radio"
-              name="mapLayer"
-              value="storm-reports"
-              className="form-radio text-teal-500 bg-gray-700 border-gray-600 focus:ring-teal-500"
-              checked={mapSelection === 'storm-reports'}
-              onChange={(e) => setMapSelection(e.target.value)}
-            />
+          </button>
+          <button
+            onClick={() => setMapSelection('storm-reports')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+              mapSelection === 'storm-reports'
+                ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
+            }`}
+          >
             Storm Reports
-          </label>
-          <label className="flex items-center text-gray-200 text-sm gap-2 cursor-pointer select-none">
-            <input
-              type="radio"
-              name="mapLayer"
-              value="warnings-only"
-              className="form-radio text-teal-500 bg-gray-700 border-gray-600 focus:ring-teal-500"
-              checked={mapSelection === 'warnings-only'}
-              onChange={(e) => setMapSelection(e.target.value)}
-            />
-            Warnings Only
-          </label>
-          <label className="flex items-center text-gray-200 text-sm gap-2 cursor-pointer select-none">
-            <input
-              type="radio"
-              name="mapLayer"
-              value="future-radar"
-              className="form-radio text-teal-500 bg-gray-700 border-gray-600 focus:ring-teal-500"
-              checked={mapSelection === 'future-radar'}
-              onChange={(e) => setMapSelection(e.target.value)}
-            />
+          </button>
+          <div className="relative" ref={submenuRef}>
+            <button
+              onClick={handleSpcOutlookClick}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                mapSelection === 'spc-outlooks'
+                  ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
+                  : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
+              }`}
+            >
+              SPC Outlooks ▼
+            </button>
+            
+            {/* SPC Submenu */}
+            {showSpcSubmenu && (
+              <div className="absolute top-full left-0 mt-1 bg-gray-800/95 backdrop-blur-md rounded-md shadow-lg border border-gray-600 min-w-48 z-[1001]">
+                <div className="p-2 space-y-1">
+                  {spcLayers.map((layer) => (
+                    <button
+                      key={layer.id}
+                      onClick={() => handleSpcLayerSelect(layer.id)}
+                      className={`w-full text-left px-3 py-2 text-sm rounded transition-colors ${
+                        spcOutlookLayer === layer.id
+                          ? 'bg-teal-500 text-white'
+                          : 'text-gray-200 hover:bg-gray-700'
+                      }`}
+                      title={layer.description}
+                    >
+                      {layer.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setMapSelection('future-radar')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+              mapSelection === 'future-radar'
+                ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
+            }`}
+          >
             Future Radar
-          </label>
+          </button>
         </div>
       </div>
-      {/* Radar opacity slider - only show when radar is enabled */}
-      {(mapSelection === 'radar-warnings' || mapSelection === 'future-radar') && (
-        <div className="mt-4">
-          <label htmlFor="opacity" className="block text-xs text-gray-400 mb-1">
-            Radar Opacity
-          </label>
-          <input
-            id="opacity"
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={radarOpacity}
-            onChange={(e) => setRadarOpacity(parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-teal-500"
-          />
-        </div>
-      )}
     </div>
   );
 };

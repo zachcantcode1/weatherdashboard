@@ -9,12 +9,14 @@ import * as LEsri from 'esri-leaflet';
 import { createLayerComponent } from '@react-leaflet/core';
 import MarkerClusterGroup from 'react-leaflet-markercluster';
 import LsrLegend from '../components/LsrLegend'; // Adjust path if LsrLegend is elsewhere
+import SpcLegend from '../components/SpcLegend';
 import MapControls from '../components/MapControls';
 import AtmosXAlertsLayer from '../components/AtmosXAlertsLayer';
 import IEMRadarLayer from '../components/IEMRadarLayer';
 import RadarTimeSlider from '../components/RadarTimeSlider';
 import FutureRadarLayer from '../components/FutureRadarLayer';
 import FutureRadarTimeSlider from '../components/FutureRadarTimeSlider';
+import SPCKMLLayer from '../components/SPCKMLLayer';
 
 // Helper component to adjust map view based on alert geometry
 function MapController({ alertGeometry }) {
@@ -138,9 +140,37 @@ const EsriFeatureLayer = (url, style) => createLayerComponent((props, ctx) => {
 
 export function MapPage() {
   console.log('[MapPage] Component rendering/re-rendering');
-  const [radarOpacity, setRadarOpacity] = useState(0.7);
+  const [radarOpacity, setRadarOpacity] = useState(0.75);
   // Map layer selection state - single selection for all layers
-  const [mapSelection, setMapSelection] = useState('radar-warnings'); // 'radar-warnings', 'storm-reports', 'warnings-only'
+  const [mapSelection, setMapSelection] = useState('radar-warnings'); // 'radar-warnings', 'storm-reports', 'spc-outlooks'
+  const [spcOutlookLayer, setSpcOutlookLayer] = useState('day1-categorical'); // Default to Day 1 Categorical
+
+  // Helper function to get layer details from layer ID
+  const getSpcLayerDetails = (layerId) => {
+    const layerMap = {
+      'day1-categorical': { type: 'categorical', day: 1, name: 'Day 1 Categorical' },
+      'day1-tornado': { type: 'tornado', day: 1, name: 'Day 1 Tornado Prob' },
+      'day1-hail': { type: 'hail', day: 1, name: 'Day 1 Hail Prob' },
+      'day1-wind': { type: 'wind', day: 1, name: 'Day 1 Wind Prob' },
+      'day2-categorical': { type: 'categorical', day: 2, name: 'Day 2 Categorical' },
+      'day2-tornado': { type: 'tornado', day: 2, name: 'Day 2 Tornado Prob' },
+      'day2-hail': { type: 'hail', day: 2, name: 'Day 2 Hail Prob' },
+      'day2-wind': { type: 'wind', day: 2, name: 'Day 2 Wind Prob' },
+      'day3-categorical': { type: 'categorical', day: 3, name: 'Day 3 Categorical' },
+      'day3-probabilistic': { type: 'probabilistic', day: 3, name: 'Day 3 Probabilistic' },
+      'day4-probabilistic': { type: 'probabilistic', day: 4, name: 'Day 4 Probabilistic' },
+      'day5-probabilistic': { type: 'probabilistic', day: 5, name: 'Day 5 Probabilistic' },
+      'day6-probabilistic': { type: 'probabilistic', day: 6, name: 'Day 6 Probabilistic' },
+      'day7-probabilistic': { type: 'probabilistic', day: 7, name: 'Day 7 Probabilistic' },
+      'day8-probabilistic': { type: 'probabilistic', day: 8, name: 'Day 8 Probabilistic' }
+    };
+    return layerMap[layerId] || { type: 'categorical', day: 1, name: 'Unknown' };
+  };
+
+  // Debug log for SPC layer changes
+  useEffect(() => {
+    console.log('SPC Outlook Layer changed to:', spcOutlookLayer);
+  }, [spcOutlookLayer]);
   
   // Radar-specific state
   const [radarSelectedTime, setRadarSelectedTime] = useState(null);
@@ -159,9 +189,10 @@ export function MapPage() {
 
   // Derived states based on selection
   const showRadar = mapSelection === 'radar-warnings';
-  const showWwa = mapSelection === 'radar-warnings' || mapSelection === 'warnings-only';
+  const showWwa = mapSelection === 'radar-warnings';
   const showLsrLayer = mapSelection === 'storm-reports';
   const showFutureRadar = mapSelection === 'future-radar';
+  const showSpcOutlooks = mapSelection === 'spc-outlooks';
   
   // Expose functions for IEM radar layer to communicate with parent
   useEffect(() => {
@@ -361,10 +392,20 @@ export function MapPage() {
           scrollWheelZoom
           style={{ height: '100%', width: '100%' }}
         >
-          {/* Basemap */}
+          {/* Basemap - ArcGIS Dark Gray Canvas */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            key="arcgis-base"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+            attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+            zIndex={1}
+          />
+          
+          {/* Reference Layer - labels and borders on top */}
+          <TileLayer
+            key="arcgis-reference"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+            attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+            zIndex={1000}
           />
 
           {/* IEM NEXRAD Radar */}
@@ -374,7 +415,7 @@ export function MapPage() {
             selectedTime={radarSelectedTime}
           />
 
-          {/* Future Radar from HRRR Model */}
+          {/* Future Radar Forecast */}
           {showFutureRadar && (
             <FutureRadarLayer
               isVisible={showFutureRadar}
@@ -433,20 +474,36 @@ export function MapPage() {
             </MarkerClusterGroup>
           )}
 
+          {/* SPC Weather Outlooks */}
+          {showSpcOutlooks && (
+            <SPCKMLLayer
+              key={`spc-outlook-${spcOutlookLayer}`}
+              outlookType={getSpcLayerDetails(spcOutlookLayer).type}
+              day={getSpcLayerDetails(spcOutlookLayer).day}
+            />
+          )}
+
           {/* Controller for zoom-to-alert functionality */}
           <MapController alertGeometry={alertGeometry} />
         </MapContainer>
 
         {/* Legend */}
         {showLsrLayer && <LsrLegend items={legendItems} />}
+        
+        {/* SPC Legend */}
+        {showSpcOutlooks && (
+          <SpcLegend 
+            layerId={spcOutlookLayer}
+            layerName={getSpcLayerDetails(spcOutlookLayer).name}
+          />
+        )}
 
         {/* Controls overlay */}
         <MapControls
           mapSelection={mapSelection}
           setMapSelection={setMapSelection}
-          radarOpacity={radarOpacity}
-          setRadarOpacity={setRadarOpacity}
-          positionClass="absolute top-4 right-4"
+          spcOutlookLayer={spcOutlookLayer}
+          setSpcOutlookLayer={setSpcOutlookLayer}
         />
 
         {/* Radar Time Slider - positioned outside map to avoid interaction conflicts */}

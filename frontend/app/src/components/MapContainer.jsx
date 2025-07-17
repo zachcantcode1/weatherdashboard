@@ -11,7 +11,7 @@ import TimeSliderControl from './TimeSliderControl';
 import MapControls from './MapControls';
 import AtmosXAlertsLayer from './AtmosXAlertsLayer';
 
-const MAPBOX_TOKEN = 'pk.eyJ1IjoiemFjaG1pbGxlOTYiLCJhIjoiY200cmR2bXJ5MDNvbzJqb3F6dHQ0NDF6ZSJ9.ZbynfFycdWjRz1Bf-2iluQ';
+// Removed MAPBOX_TOKEN as we're now using ArcGIS basemap
 
 // Custom Radar Layer Component that keeps all frames loaded and switches visibility
 function RadarLayer({ radarOpacity, availableTimes, currentTimeIndex, onLayerReady, isVisible = true }) {
@@ -267,11 +267,20 @@ const MapContainer = ({ onAlertGeometry, initialAlertGeometry }) => {
       >
         <MapController alertGeometry={alertGeometry} map={mapRef.current} />
 
-        {/* Base Map Tiles */}
+        {/* Base Map Tiles - ArcGIS Dark Gray Canvas */}
         <TileLayer
-          url={`https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`}
-          attribution='&copy; <a href="https://www.mapbox.com/">Mapbox</a>'
-          zoomOffset={-1}
+          key="arcgis-base"
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+          zIndex={1}
+        />
+        
+        {/* Reference Layer - labels and borders on top */}
+        <TileLayer
+          key="arcgis-reference"
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+          zIndex={1000}
         />
 
         {/* Radar - always render but control visibility */}

@@ -23,13 +23,36 @@ const FutureRadarLayer = ({ opacity = 0.7, isVisible = true, forecastMinute = 0,
 
   const [availableForecastTimes] = useState(generateForecastTimes());
 
+  // Format model run time for IEM URL (YYYYMMDDHHMI format)
+  const formatModelRunForURL = (date) => {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hour = String(date.getUTCHours()).padStart(2, '0');
+    const minute = String(date.getUTCMinutes()).padStart(2, '0');
+    const formatted = `${year}${month}${day}${hour}${minute}`;
+    console.log(`[FutureRadarLayer] Formatted model run: ${date.toISOString()} -> ${formatted}`);
+    return formatted;
+  };
+
   // Create a forecast layer for a specific time
   const createForecastLayer = (forecastMinutes) => {
     // Format forecast minute to 4 digits with F prefix (e.g., "F0060" for 60 minutes)
     const forecastStr = `F${String(forecastMinutes).padStart(4, '0')}`;
     
-    // Create TMS URL for HRRR forecast using the latest data (suffix -0)
-    const tileUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/hrrr::REFD-${forecastStr}-0/{z}/{x}/{y}.png`;
+    // Create TMS URL for HRRR forecast
+    let tileUrl;
+    if (modelRun) {
+      // Use specific model run if available (format: YYYYMMDDHHMI)
+      const modelRunDate = new Date(modelRun);
+      const modelRunStr = formatModelRunForURL(modelRunDate);
+      tileUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/hrrr::REFD-${forecastStr}-${modelRunStr}/{z}/{x}/{y}.png`;
+      console.log(`[FutureRadarLayer] Using specific model run ${modelRunStr} for ${forecastStr}`);
+    } else {
+      // Fallback to latest data if no specific model run available
+      tileUrl = `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/hrrr::REFD-${forecastStr}-0/{z}/{x}/{y}.png`;
+      console.log(`[FutureRadarLayer] Using latest data for ${forecastStr}`);
+    }
 
     const layer = L.tileLayer(tileUrl, {
       attribution: '© Iowa Environmental Mesonet',
@@ -39,6 +62,8 @@ const FutureRadarLayer = ({ opacity = 0.7, isVisible = true, forecastMinute = 0,
       transparent: true,
       format: 'image/png'
     });
+
+    console.log(`[FutureRadarLayer] Created layer with URL template: ${tileUrl}`);
 
     // Add load event listener
     layer.on('load', () => {
@@ -119,11 +144,22 @@ const FutureRadarLayer = ({ opacity = 0.7, isVisible = true, forecastMinute = 0,
       try {
         const response = await fetch('https://mesonet.agron.iastate.edu/data/gis/images/4326/hrrr/refd_0000.json');
         const data = await response.json();
-        setModelRun(data.model_init_utc);
+        
+        // Check if this is a new model run
+        const newModelRun = data.model_init_utc;
+        const isNewModelRun = modelRun && modelRun !== newModelRun;
+        
+        console.log(`[FutureRadarLayer] Fetched model run: ${newModelRun}`);
+        if (isNewModelRun) {
+          console.log('[FutureRadarLayer] New model run detected, clearing cache');
+          layerCacheRef.current.clear();
+        }
+        
+        setModelRun(newModelRun);
         setError(null);
         // Notify parent component of model run change
         if (onModelRunChange) {
-          onModelRunChange(data.model_init_utc, false, null);
+          onModelRunChange(newModelRun, false, null);
         }
       } catch (err) {
         console.error('Error fetching HRRR model run time:', err);

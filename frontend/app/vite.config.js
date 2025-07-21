@@ -21,11 +21,7 @@ export default defineConfig({
       strict: false,
     },
     proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        secure: false,
-      },
+      '/api': 'http://localhost:3001',
       '/processed': {
         target: 'http://localhost:3001',
         changeOrigin: true,

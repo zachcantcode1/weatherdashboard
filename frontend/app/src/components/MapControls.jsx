@@ -6,11 +6,17 @@ import React, { useState, useEffect, useRef } from 'react';
  * TailwindCSS / shadcn inspired dark style.
  */
 const MapControls = ({
-  mapSelection,
-  setMapSelection,
+  selectedLayer,
+  setSelectedLayer,
+  radarOpacity,
+  setRadarOpacity,
+  sigTorOpacity,
+  setSigTorOpacity,
+  capeOpacity,
+  setCapeOpacity,
   spcOutlookLayer,
   setSpcOutlookLayer,
-  positionClass = 'absolute top-4 left-1/2 transform -translate-x-1/2',
+  positionClass = 'absolute top-4 right-[336px]',
 }) => {
   const [showSpcSubmenu, setShowSpcSubmenu] = useState(false);
   const submenuRef = useRef(null);
@@ -56,13 +62,14 @@ const MapControls = ({
   ];
 
   const handleSpcOutlookClick = () => {
-    setMapSelection('spc-outlooks');
+    setSelectedLayer('spc-outlooks');
     setShowSpcSubmenu(!showSpcSubmenu);
   };
 
   const handleSpcLayerSelect = (layerId) => {
     console.log('SPC Layer selected:', layerId); // Debug log
     setSpcOutlookLayer(layerId);
+    setSelectedLayer('spc-outlooks');
     setShowSpcSubmenu(false);
   };
   return (
@@ -71,19 +78,19 @@ const MapControls = ({
       <div>
         <div className="flex gap-2">
           <button
-            onClick={() => setMapSelection('radar-warnings')}
+            onClick={() => setSelectedLayer('radar-warnings')}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-              mapSelection === 'radar-warnings'
+              selectedLayer === 'radar-warnings'
                 ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
                 : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
             }`}
           >
-            Radar with Warnings
+            Radar
           </button>
           <button
-            onClick={() => setMapSelection('storm-reports')}
+            onClick={() => setSelectedLayer('storm-reports')}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-              mapSelection === 'storm-reports'
+              selectedLayer === 'storm-reports'
                 ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
                 : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
             }`}
@@ -92,9 +99,9 @@ const MapControls = ({
           </button>
           <div className="relative" ref={submenuRef}>
             <button
-              onClick={handleSpcOutlookClick}
+              onClick={() => setShowSpcSubmenu(!showSpcSubmenu)}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                mapSelection === 'spc-outlooks'
+                selectedLayer === 'spc-outlooks'
                   ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
                   : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
               }`}
@@ -125,9 +132,9 @@ const MapControls = ({
             )}
           </div>
           <button
-            onClick={() => setMapSelection('future-radar')}
+            onClick={() => setSelectedLayer('future-radar')}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-              mapSelection === 'future-radar'
+              selectedLayer === 'future-radar'
                 ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
                 : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
             }`}

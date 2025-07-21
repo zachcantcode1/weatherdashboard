@@ -69,7 +69,7 @@ const SPCKMLLayer = ({ outlookType, day }) => {
       weight: 2,
       opacity: 0.9,
       fillColor: fillColor,
-      fillOpacity: 0.6
+      fillOpacity: 0.3 // Lowered for more translucency
     };
   };
 
@@ -86,7 +86,7 @@ const SPCKMLLayer = ({ outlookType, day }) => {
       weight: 2,
       opacity: 0.9,
       fillColor: fillColor,
-      fillOpacity: 0.6
+      fillOpacity: 0.3 // Lowered for more translucency
     };
   };
 

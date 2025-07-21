@@ -6,7 +6,7 @@ import L from 'leaflet';
  * IEMRadarLayer - Displays NEXRAD radar imagery from Iowa State University
  * Uses caching and opacity-based transitions for smooth time scrubbing
  */
-const IEMRadarLayer = ({ isVisible = true, opacity = 0.7, selectedTime = null }) => {
+const IEMRadarLayer = ({ isVisible = true, opacity = 0.7, selectedTime = null, overlayType = 'radar' }) => {
   const map = useMap();
   const [availableTimes, setAvailableTimes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -53,31 +53,46 @@ const IEMRadarLayer = ({ isVisible = true, opacity = 0.7, selectedTime = null })
     }) + ' CT';
   };
 
-  // Get the WMS URL for IEM NEXRAD
+  // Get the WMS or overlay URL based on overlayType
   const getRadarUrl = () => {
+    // Default: IEM NEXRAD WMS
     return 'https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r-t.cgi';
   };
+  // overlayType is now always received from props
 
   // Create a radar layer for a specific time
   const createRadarLayer = (timestamp) => {
-    const layer = L.tileLayer.wms(getRadarUrl(), {
-      layers: 'nexrad-n0r-wmst',
-      format: 'image/png',
-      transparent: true,
-      opacity: 0, // Start invisible
-      time: timestamp,
-      version: '1.1.1',
-      crs: L.CRS.EPSG4326,
-      attribution: '© Iowa Environmental Mesonet',
-      zIndex: 200
-    });
-
-    // Add load event listener for preloading
-    layer.on('load', () => {
-      console.log('[IEMRadarLayer] Layer loaded for time:', timestamp);
-    });
-
-    return layer;
+    if (overlayType === 'sigtor' || overlayType === 'cape') {
+      // Use imageOverlay for backend PNG overlays
+      const bounds = [[20, -130], [55, -60]];
+      const imageUrl = getRadarUrl();
+      const layer = L.imageOverlay(imageUrl, bounds, {
+        opacity: 0,
+        zIndex: 200,
+        interactive: false
+      });
+      layer.on('load', () => {
+        console.log('[IEMRadarLayer] Layer loaded for time:', timestamp);
+      });
+      return layer;
+    } else {
+      // Use WMS for radar
+      const layer = L.tileLayer.wms(getRadarUrl(), {
+        layers: 'nexrad-n0r-wmst',
+        format: 'image/png',
+        transparent: true,
+        opacity: 0, // Start invisible
+        time: timestamp,
+        version: '1.1.1',
+        crs: L.CRS.EPSG4326,
+        attribution: '© Iowa Environmental Mesonet',
+        zIndex: 200
+      });
+      layer.on('load', () => {
+        console.log('[IEMRadarLayer] Layer loaded for time:', timestamp);
+      });
+      return layer;
+    }
   };
 
   // Preload radar layers with smart prioritization

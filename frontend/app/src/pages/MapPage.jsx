@@ -142,7 +142,7 @@ export function MapPage() {
   console.log('[MapPage] Component rendering/re-rendering');
   const [radarOpacity, setRadarOpacity] = useState(0.75);
   // Map layer selection state - single selection for all layers
-  const [mapSelection, setMapSelection] = useState('radar-warnings'); // 'radar-warnings', 'storm-reports', 'spc-outlooks'
+  const [selectedLayer, setSelectedLayer] = useState('radar-warnings'); // 'radar-warnings', 'storm-reports', 'spc-outlooks'
   const [spcOutlookLayer, setSpcOutlookLayer] = useState('day1-categorical'); // Default to Day 1 Categorical
 
   // Helper function to get layer details from layer ID
@@ -188,11 +188,11 @@ export function MapPage() {
   const [lsrData, setLsrData] = useState(null);
 
   // Derived states based on selection
-  const showRadar = mapSelection === 'radar-warnings';
-  const showWwa = mapSelection === 'radar-warnings';
-  const showLsrLayer = mapSelection === 'storm-reports';
-  const showFutureRadar = mapSelection === 'future-radar';
-  const showSpcOutlooks = mapSelection === 'spc-outlooks';
+  const showRadar = selectedLayer === 'radar-warnings';
+  const showWwa = selectedLayer === 'radar-warnings';
+  const showLsrLayer = selectedLayer === 'storm-reports';
+  const showFutureRadar = selectedLayer === 'future-radar';
+  const showSpcOutlooks = selectedLayer === 'spc-outlooks';
   
   // Expose functions for IEM radar layer to communicate with parent
   useEffect(() => {
@@ -216,7 +216,7 @@ export function MapPage() {
 
   const debounceTimerRef = useRef(null);
   const location = useLocation();
-  console.log('MapPage: mapSelection state:', mapSelection); // Log map selection state
+  console.log('MapPage: selectedLayer state:', selectedLayer); // Log map selection state
   const alertGeometry = location.state?.alertGeometry;
 
   // Clear alertGeometry from history state after first render to avoid persistence on refresh
@@ -235,7 +235,7 @@ export function MapPage() {
   const initialCenter = defaultUsaCenter;
 
   useEffect(() => {
-    console.log('MapPage: LSR useEffect triggered. mapSelection:', mapSelection, 'lsrData exists:', !!lsrData); // Log effect trigger
+    console.log('MapPage: LSR useEffect triggered. selectedLayer:', selectedLayer, 'lsrData exists:', !!lsrData); // Log effect trigger
     if (showLsrLayer && !lsrData) {
       console.log('MapPage: Fetching LSR GeoJSON data...'); // Log fetch initiation
       fetch('https://mapservices.weather.noaa.gov/vector/rest/services/obs/nws_local_storm_reports/MapServer/0/query?where=1%3D1&outFields=*&f=geojson')
@@ -290,13 +290,13 @@ export function MapPage() {
         .catch(error => {
           console.error('MapPage: Error fetching LSR GeoJSON data:', error); // Log fetch error
         });
-    } else if (mapSelection !== 'storm-reports' && lsrData) {
+    } else if (selectedLayer !== 'storm-reports' && lsrData) {
       // Optional: Consider clearing data if layer is turned off and you want to re-fetch next time
       // Or to free up memory if features are very numerous.
       // console.log('MapPage: LSR layer turned off, optionally clear lsrData here.');
       // setLsrData(null); // Uncomment if you want to clear data on toggle off
     }
-  }, [mapSelection]);
+  }, [selectedLayer]);
 
   const handleTimeChange = (newIndex, newTime) => {
     // Stop looping when user manually changes time
@@ -408,12 +408,15 @@ export function MapPage() {
             zIndex={1000}
           />
 
+
           {/* IEM NEXRAD Radar */}
           <IEMRadarLayer 
             isVisible={showRadar}
             opacity={radarOpacity}
             selectedTime={radarSelectedTime}
+            overlayType="radar"
           />
+
 
           {/* Future Radar Forecast */}
           {showFutureRadar && (
@@ -500,8 +503,8 @@ export function MapPage() {
 
         {/* Controls overlay */}
         <MapControls
-          mapSelection={mapSelection}
-          setMapSelection={setMapSelection}
+          selectedLayer={selectedLayer}
+          setSelectedLayer={setSelectedLayer}
           spcOutlookLayer={spcOutlookLayer}
           setSpcOutlookLayer={setSpcOutlookLayer}
         />

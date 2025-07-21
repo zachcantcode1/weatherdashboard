@@ -3,48 +3,31 @@ import L from 'leaflet';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { MapContainer as LeafletMapContainer, TileLayer, Marker, Popup, Polygon, Circle, useMap, GeoJSON } from 'react-leaflet';
-import * as LEsri from 'esri-leaflet';
-import { createLayerComponent } from '@react-leaflet/core';
+// ...existing code...
 import MarkerClusterGroup from 'react-leaflet-markercluster';
 import LsrLegend from './LsrLegend';
 import TimeSliderControl from './TimeSliderControl';
 import MapControls from './MapControls';
 import AtmosXAlertsLayer from './AtmosXAlertsLayer';
 
-// Removed MAPBOX_TOKEN as we're now using ArcGIS basemap
+// Only using MapTiler as the base map
 
 // Custom Radar Layer Component that keeps all frames loaded and switches visibility
 function RadarLayer({ radarOpacity, availableTimes, currentTimeIndex, onLayerReady, isVisible = true }) {
   const map = useMap();
   const layersRef = useRef({});
+  const lastTimesRef = useRef([]);
   const layersCreatedRef = useRef(false);
+  // US bounding box for overlay
+  const bounds = [[20, -130], [55, -60]];
 
-  // Create layers effect - stable dependency array
   useEffect(() => {
-    if (!map || !availableTimes.length || layersCreatedRef.current) return;
+    if (!map || !availableTimes.length) return;
+    const timesChanged = JSON.stringify(availableTimes) !== JSON.stringify(lastTimesRef.current);
+    if (layersCreatedRef.current && !timesChanged) return;
 
-    console.log('[RadarLayer] Creating', availableTimes.length, 'persistent radar layers...');
-    
-    availableTimes.forEach((timeString, index) => {
-      const wmsLayer = L.tileLayer.wms('https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r-t.cgi', {
-        layers: 'nexrad-n0r-wmst',
-        format: 'image/png',
-        transparent: true,
-        opacity: 0, // Start with 0 opacity, will be set based on visibility
-        time: timeString,
-        attribution: 'Iowa State Mesonet',
-        updateWhenIdle: false,
-        updateWhenZooming: false,
-        zIndex: 200 + index
-      });
-
-      wmsLayer.addTo(map);
-      layersRef.current[index] = wmsLayer;
-    });
-
-    layersCreatedRef.current = true;
-
-    return () => {
+    // Remove old overlays if times changed
+    if (layersCreatedRef.current && timesChanged) {
       Object.values(layersRef.current).forEach(layer => {
         if (layer && map.hasLayer(layer)) {
           map.removeLayer(layer);
@@ -52,10 +35,33 @@ function RadarLayer({ radarOpacity, availableTimes, currentTimeIndex, onLayerRea
       });
       layersRef.current = {};
       layersCreatedRef.current = false;
-    };
-  }, [map, availableTimes]);
+    }
 
-  // Update layer visibility and opacity when currentTimeIndex or opacity changes
+    // Create new overlays for each time
+    availableTimes.forEach((timeString, index) => {
+      const timeKey = timeString.replace(/[:]/g, '-');
+      let imageUrl = `/api/radar/${timeKey}`;
+      if (overlayType === 'sigtor') {
+        imageUrl = `/api/sigtor/${timeKey}`;
+      } else if (overlayType === 'cape') {
+        imageUrl = `/api/cape/${timeKey}`;
+      }
+      const overlay = L.imageOverlay(imageUrl, bounds, {
+        opacity: 0,
+        zIndex: 200 + index,
+        interactive: false
+      });
+      overlay.addTo(map);
+      layersRef.current[index] = overlay;
+    });
+    layersCreatedRef.current = true;
+    lastTimesRef.current = availableTimes;
+    if (onLayerReady) {
+      onLayerReady(layersRef.current);
+    }
+    // No cleanup here: overlays persist for browser caching
+  }, [map, availableTimes, onLayerReady, overlayType]);
+
   useEffect(() => {
     if (layersCreatedRef.current && Object.keys(layersRef.current).length > 0) {
       Object.entries(layersRef.current).forEach(([index, layer]) => {
@@ -68,13 +74,6 @@ function RadarLayer({ radarOpacity, availableTimes, currentTimeIndex, onLayerRea
       });
     }
   }, [currentTimeIndex, radarOpacity, isVisible]);
-
-  // Notify parent when layers are ready
-  useEffect(() => {
-    if (layersCreatedRef.current && onLayerReady) {
-      onLayerReady(layersRef.current);
-    }
-  }, [onLayerReady]);
 
   return null;
 }
@@ -145,10 +144,15 @@ const getLsrIcon = (descript) => {
 const MapContainer = ({ onAlertGeometry, initialAlertGeometry }) => {
   const [radarOpacity, setRadarOpacity] = useState(0.7);
   const [selectedLayer, setSelectedLayer] = useState('radar');
-  
+  // New: SIG TOR and CAPE opacity
+  const [sigTorOpacity, setSigTorOpacity] = useState(0.7);
+  const [capeOpacity, setCapeOpacity] = useState(0.7);
+
   const mapRef = useRef(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [radarLayers, setRadarLayers] = useState({});
+  const [sigTorLayers, setSigTorLayers] = useState({});
+  const [capeLayers, setCapeLayers] = useState({});
   const [lsrData, setLsrData] = useState(null);
   const [alertGeometry, setAlertGeometry] = useState(initialAlertGeometry || null);
   const [legendItems, setLegendItems] = useState([]);
@@ -175,6 +179,14 @@ const MapContainer = ({ onAlertGeometry, initialAlertGeometry }) => {
   // Handle radar layers being ready - use useCallback for stable reference
   const handleRadarLayersReady = useCallback((layers) => {
     setRadarLayers(layers);
+  }, []);
+  // SIG TOR layers
+  const handleSigTorLayersReady = useCallback((layers) => {
+    setSigTorLayers(layers);
+  }, []);
+  // CAPE layers
+  const handleCapeLayersReady = useCallback((layers) => {
+    setCapeLayers(layers);
   }, []);
 
   // Handle time slider changes
@@ -267,20 +279,12 @@ const MapContainer = ({ onAlertGeometry, initialAlertGeometry }) => {
       >
         <MapController alertGeometry={alertGeometry} map={mapRef.current} />
 
-        {/* Base Map Tiles - ArcGIS Dark Gray Canvas */}
+        {/* Base Map Tiles - MapTiler Custom Style (ONLY) */}
         <TileLayer
-          key="arcgis-base"
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+          key="maptiler-base"
+          url="https://api.maptiler.com/maps/01982939-1e95-711f-9245-7617169d678c/256/{z}/{x}/{y}.png?key=gla6jJrg1mkuiU957oqk"
+          attribution='&copy; <a href="https://www.maptiler.com/">MapTiler</a>'
           zIndex={1}
-        />
-        
-        {/* Reference Layer - labels and borders on top */}
-        <TileLayer
-          key="arcgis-reference"
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
-          zIndex={1000}
         />
 
         {/* Radar - always render but control visibility */}
@@ -290,6 +294,26 @@ const MapContainer = ({ onAlertGeometry, initialAlertGeometry }) => {
           currentTimeIndex={radarTimeInfo.currentIndex}
           onLayerReady={handleRadarLayersReady}
           isVisible={selectedLayer === 'radar'}
+        />
+
+        {/* SIG TOR overlay - always render but control visibility */}
+        <RadarLayer
+          radarOpacity={sigTorOpacity}
+          availableTimes={radarTimeInfo.availableTimes}
+          currentTimeIndex={radarTimeInfo.currentIndex}
+          onLayerReady={handleSigTorLayersReady}
+          isVisible={selectedLayer === 'sigtor'}
+          overlayType="sigtor"
+        />
+
+        {/* CAPE overlay - always render but control visibility */}
+        <RadarLayer
+          radarOpacity={capeOpacity}
+          availableTimes={radarTimeInfo.availableTimes}
+          currentTimeIndex={radarTimeInfo.currentIndex}
+          onLayerReady={handleCapeLayersReady}
+          isVisible={selectedLayer === 'cape'}
+          overlayType="cape"
         />
 
         {/* Real-time Weather Alerts from AtmosphericX - always render but control visibility */}
@@ -333,7 +357,7 @@ const MapContainer = ({ onAlertGeometry, initialAlertGeometry }) => {
       <div 
         className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000]"
         style={{ 
-          display: (selectedLayer === 'radar' && isMapReady) ? 'block' : 'none' 
+          display: (["radar", "sigtor", "cape"].includes(selectedLayer) && isMapReady) ? 'block' : 'none' 
         }}
       >
         <TimeSliderControl
@@ -363,6 +387,10 @@ const MapContainer = ({ onAlertGeometry, initialAlertGeometry }) => {
           setSelectedLayer={setSelectedLayer}
           radarOpacity={radarOpacity}
           setRadarOpacity={setRadarOpacity}
+          sigTorOpacity={sigTorOpacity}
+          setSigTorOpacity={setSigTorOpacity}
+          capeOpacity={capeOpacity}
+          setCapeOpacity={setCapeOpacity}
         />
       </div>
     </div>

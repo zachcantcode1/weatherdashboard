@@ -1,9 +1,11 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
-// Toggle verbose backend logging (including Socket.IO connect/disconnect)
+const RADAR_CACHE_DIR = path.join(__dirname, 'radar_cache');
+
 const VERBOSE = process.env.XMPP_VERBOSE === 'true';
 const { setupXmppClient } = require('./xmppClient');
 
@@ -21,6 +23,21 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
   },
 });
+
+// Serve radar images from cache
+app.get('/api/radar/:time', (req, res) => {
+  const time = req.params.time;
+  const fileName = `${time}.png`;
+  const filePath = path.join(RADAR_CACHE_DIR, fileName);
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    fs.createReadStream(filePath).pipe(res);
+  } else {
+    res.status(404).send('Radar image not found');
+  }
+});
+
 
 const PORT = process.env.PORT || 3001;
 

@@ -57,6 +57,6 @@ io.on('connection', (socket) => {
 setupXmppClient(io);
 
 // --- Start the Express Server ---
-server.listen(PORT, () => {
-  console.log(`Backend server listening on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend server listening on port ${PORT} (0.0.0.0)`);
 });

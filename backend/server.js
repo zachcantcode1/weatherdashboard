@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 // Setup Socket.IO with CORS configuration to allow our frontend to connect
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173', // Your Vite dev server URL
+    origin: '*', // Allow all origins for maximum compatibility
     methods: ['GET', 'POST'],
   },
 });

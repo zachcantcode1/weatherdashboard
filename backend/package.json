@@ -14,6 +14,7 @@
     "@xmpp/client": "^0.13.4",
     "express": "^5.1.0",
     "he": "^1.2.0",
+    "node-fetch": "^3.3.2",
     "socket.io": "^4.8.1",
     "xml2js": "^0.6.2"
   }

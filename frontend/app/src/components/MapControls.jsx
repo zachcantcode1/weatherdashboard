@@ -141,6 +141,16 @@ const MapControls = ({
           >
             Future Radar
           </button>
+          <button
+            onClick={() => setSelectedLayer('single-radar')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+              selectedLayer === 'single-radar'
+                ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20 border border-teal-400'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600'
+            }`}
+          >
+            Single Radar
+          </button>
         </div>
       </div>
     </div>

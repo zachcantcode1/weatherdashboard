@@ -17,6 +17,7 @@ import RadarTimeSlider from '../components/RadarTimeSlider';
 import FutureRadarLayer from '../components/FutureRadarLayer';
 import FutureRadarTimeSlider from '../components/FutureRadarTimeSlider';
 import SPCKMLLayer from '../components/SPCKMLLayer';
+import PNGRadarLayer from '../components/PNGRadarLayer';
 
 // Helper component to adjust map view based on alert geometry
 function MapController({ alertGeometry }) {
@@ -179,6 +180,13 @@ export function MapPage() {
   const [radarLooping, setRadarLooping] = useState(false);
   const loopIntervalRef = useRef(null);
 
+  // PNG Radar-specific state
+  const [pngRadarSelectedTime, setPngRadarSelectedTime] = useState(null);
+  const [pngRadarAvailableTimes, setPngRadarAvailableTimes] = useState([]);
+  const [pngRadarLoading, setPngRadarLoading] = useState(false);
+  const [pngRadarLooping, setPngRadarLooping] = useState(false);
+  const pngLoopIntervalRef = useRef(null);
+
   // Future radar state
   const [futureRadarForecastMinute, setFutureRadarForecastMinute] = useState(0);
   const [futureRadarModelRun, setFutureRadarModelRun] = useState(null);
@@ -193,6 +201,7 @@ export function MapPage() {
   const showLsrLayer = selectedLayer === 'storm-reports';
   const showFutureRadar = selectedLayer === 'future-radar';
   const showSpcOutlooks = selectedLayer === 'spc-outlooks';
+  const showSingleRadar = selectedLayer === 'single-radar';
   
   // Expose functions for IEM radar layer to communicate with parent
   useEffect(() => {
@@ -213,6 +222,29 @@ export function MapPage() {
       delete window.setRadarLoading;
     };
   }, [radarSelectedTime]);
+
+  // Expose functions for PNG radar layer to communicate with parent
+  useEffect(() => {
+    window.setPngRadarTimes = (times) => {
+      console.log('[MapPage] setPngRadarTimes called with', times.length, 'times');
+      console.log('[MapPage] PNG radar times:', times.map(t => t.timestamp));
+      setPngRadarAvailableTimes(times);
+      // Set initial time to the latest available
+      if (times.length > 0 && !pngRadarSelectedTime) {
+        console.log('[MapPage] Setting initial PNG radar time to:', times[times.length - 1].timestamp);
+        setPngRadarSelectedTime(times[times.length - 1].timestamp);
+      }
+    };
+    
+    window.setPngRadarLoading = (loading) => {
+      setPngRadarLoading(loading);
+    };
+    
+    return () => {
+      delete window.setPngRadarTimes;
+      delete window.setPngRadarLoading;
+    };
+  }, [pngRadarSelectedTime]);
 
   const debounceTimerRef = useRef(null);
   const location = useLocation();
@@ -335,6 +367,45 @@ export function MapPage() {
     }
   };
 
+  // PNG Radar time handling functions
+  const handlePngTimeChange = (newIndex, newTime) => {
+    console.log('[MapPage] PNG radar time changed to index:', newIndex, 'time:', newTime);
+    // Stop looping when user manually changes time
+    if (pngRadarLooping) {
+      setPngRadarLooping(false);
+      if (pngLoopIntervalRef.current) {
+        clearInterval(pngLoopIntervalRef.current);
+        pngLoopIntervalRef.current = null;
+      }
+    }
+    
+    // Update selected PNG radar time
+    setPngRadarSelectedTime(newTime);
+  };
+
+  const handlePngLoopToggle = (isLooping) => {
+    setPngRadarLooping(isLooping);
+    
+    if (isLooping) {
+      // Start looping animation
+      pngLoopIntervalRef.current = setInterval(() => {
+        setPngRadarSelectedTime(currentTime => {
+          if (!pngRadarAvailableTimes.length) return currentTime;
+          
+          const currentIndex = pngRadarAvailableTimes.findIndex(time => time.timestamp === currentTime);
+          const nextIndex = currentIndex >= pngRadarAvailableTimes.length - 1 ? 0 : currentIndex + 1;
+          return pngRadarAvailableTimes[nextIndex]?.timestamp || currentTime;
+        });
+      }, 800); // Change frame every 800ms
+    } else {
+      // Stop looping
+      if (pngLoopIntervalRef.current) {
+        clearInterval(pngLoopIntervalRef.current);
+        pngLoopIntervalRef.current = null;
+      }
+    }
+  };
+
   // Future radar callback functions
   const handleFutureRadarTimeChange = (minutes) => {
     setFutureRadarForecastMinute(minutes);
@@ -425,6 +496,15 @@ export function MapPage() {
               opacity={radarOpacity}
               forecastMinute={futureRadarForecastMinute}
               onModelRunChange={handleFutureRadarModelRunChange}
+            />
+          )}
+
+          {/* Single PNG Radar */}
+          {showSingleRadar && (
+            <PNGRadarLayer
+              isVisible={showSingleRadar}
+              opacity={radarOpacity}
+              selectedTime={pngRadarSelectedTime}
             />
           )}
 
@@ -530,6 +610,19 @@ export function MapPage() {
             modelRun={futureRadarModelRun}
             isLoading={futureRadarLoading}
             error={futureRadarError}
+            positionClass="absolute bottom-4 left-4"
+          />
+        )}
+
+        {/* PNG Radar Time Slider - positioned outside map to avoid interaction conflicts */}
+        {showSingleRadar && (
+          <RadarTimeSlider
+            radarTimes={pngRadarAvailableTimes}
+            selectedTime={pngRadarSelectedTime}
+            onTimeChange={handlePngTimeChange}
+            isLoading={pngRadarLoading}
+            isLooping={pngRadarLooping}
+            onLoopToggle={handlePngLoopToggle}
             positionClass="absolute bottom-4 left-4"
           />
         )}

@@ -14,6 +14,11 @@ const RadarTimeSlider = ({
   onLoopToggle,
   positionClass = 'fixed bottom-4 left-4',
 }) => {
+  // Debug: log what we're receiving
+  console.log('[RadarTimeSlider] Received radarTimes:', radarTimes.length, 'items');
+  console.log('[RadarTimeSlider] radarTimes array:', radarTimes.map(t => t.timestamp));
+  console.log('[RadarTimeSlider] selectedTime:', selectedTime);
+  
   if (!radarTimes || radarTimes.length === 0) {
     return null;
   }

@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 
@@ -14,7 +13,6 @@ const app = express();
 const server = http.createServer(app);
 
 // Middleware
-app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -57,6 +55,6 @@ io.on('connection', (socket) => {
 setupXmppClient(io);
 
 // --- Start the Express Server ---
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend server listening on port ${PORT} (0.0.0.0)`);
+server.listen(PORT, () => {
+  if (VERBOSE) console.log(`Backend server listening on port ${PORT}`);
 });
